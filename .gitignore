@@ -1,0 +1,39 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+backend/venv/
+# OR relative to repo root:
+# ./backend/venv/
+
+# Environment files
+backend/backend/backend/.env
+# OR relative to repo root:
+# ./.env
+
+# Django stuff
+*.log
+*.pot
+*.pyc
+*.sqlite3
+db.sqlite3
+
+# Django migrations (optional to ignore)
+*/migrations/*.py
+!*/migrations/__init__.py
+
+# Static files (optional if collected)
+staticfiles/
+static/
+
+# VSCode / IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Node / frontend stuff if using Vite
+frontend/node_modules/
+dist/
