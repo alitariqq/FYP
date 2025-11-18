@@ -67,6 +67,10 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Redis connection for Celery (Change hostname to host pc's hostnmae)
+CELERY_BROKER_URL = "redis://ali-IdeaPad-Slim-3-15ABR8:6379/0"
+CELERY_RESULT_BACKEND = "redis://ali-IdeaPad-Slim-3-15ABR8:6379/1"
+
 
 ROOT_URLCONF = 'backend.urls'
 
