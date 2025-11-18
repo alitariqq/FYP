@@ -1,10 +1,17 @@
-import { useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Home() {
+  const navigate = useNavigate();
 
-  return (
-    <H1>Hello User!</H1>
-  );
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+
+    // If user is not logged in → redirect to /login
+    if (!token) {
+      navigate("/login");
+    }
+  }, []);
+
+  return <h1>Hello user</h1>;
 }
