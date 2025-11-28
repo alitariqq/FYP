@@ -19,24 +19,15 @@ export default function Home() {
     if (!token) navigate("/login");
   }, [navigate]);
 
-  // Maintian map query and suggestions state
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
-
-  // Maintain Gemini panel state
   const [panelOpen, setPanelOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Parsed request state (from Gemini PARSED { ... })
   const [parsedRequest, setParsedRequest] = useState(null);
-
-  // Maintain options dropdown state
-  const [optionsOpen, setOptionsOpen] = useState(false);
-
-  // Track latest updated shape from map (center, distance_to_edge)
   const [editedShape, setEditedShape] = useState(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
 
   // Logout handler
   const handleLogout = async () => {
@@ -44,7 +35,7 @@ export default function Home() {
       const refresh = localStorage.getItem("refresh_token");
       if (refresh) await api.post("/auth/logout/", { refresh });
     } catch (err) {
-      console.error("Logout error:", err);
+      console.error(err);
     } finally {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
@@ -52,120 +43,112 @@ export default function Home() {
     }
   };
 
-  // Gemini message send handler
+  // Send message to Gemini
   const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMessage = { sender: "user", text: input };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
 
     try {
       const response = await api.post("/queries/chat/", {
-        messages: [...messages, userMessage].map((msg) => ({
-          role: msg.sender,
-          content: msg.text,
+        messages: [...messages, userMessage].map(m => ({
+          role: m.sender,
+          content: m.text,
         })),
       });
 
       const replyText = response.data.reply || "";
 
-      // Check for PARSED block at start of reply
       if (replyText.trim().startsWith("PARSED")) {
-        // try to extract JSON block after the word PARSED
         const jsonMatch = replyText.match(/PARSED\s*([\s\S]*)/);
         if (jsonMatch && jsonMatch[1]) {
           let jsonText = jsonMatch[1].trim();
-
-          // If the block begins with a code fence or ```json, strip it
-          jsonText = jsonText.replace(/^```(?:json)?\s*/, "");
-          jsonText = jsonText.replace(/```$/, "").trim();
+          jsonText = jsonText.replace(/^```(?:json)?\s*/, "").replace(/```$/, "").trim();
 
           try {
             const parsed = JSON.parse(jsonText);
             setParsedRequest(parsed);
-            // add a gemini message noting parsed result
-            setMessages((prev) => [
+            setEditedShape(null);
+            setMessages(prev => [
               ...prev,
               { sender: "gemini", text: "Parsed request ready for confirmation." },
             ]);
-          } catch (parseErr) {
-            console.error("Failed to parse PARSED JSON:", parseErr);
-            setMessages((prev) => [
+          } catch {
+            setMessages(prev => [
               ...prev,
               { sender: "gemini", text: "Error: Gemini returned invalid PARSED JSON." },
             ]);
           }
-        } else {
-          setMessages((prev) => [
-            ...prev,
-            { sender: "gemini", text: "Error: PARSED block missing JSON." },
-          ]);
         }
       } else {
-        const geminiMessage = { sender: "gemini", text: replyText };
-        setMessages((prev) => [...prev, geminiMessage]);
+        setMessages(prev => [...prev, { sender: "gemini", text: replyText }]);
       }
     } catch (err) {
       console.error(err);
-      setMessages((prev) => [
-        ...prev,
-        { sender: "gemini", text: "Error: Could not get response." },
-      ]);
+      setMessages(prev => [...prev, { sender: "gemini", text: "Error: Could not get response." }]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Called by Map when user drags/resizes square
-  const handleUpdateShape = (update) => {
-    // update: { center: [lat, lng] OR [lng, lat], distance_to_edge: km }
-    setEditedShape(update);
-  };
+  // Map updates shape
+  const handleUpdateShape = update => setEditedShape(update);
 
-  // User confirms parsed request. Merge editedShape into parsedRequest and submit to backend
+  // Confirm parsed request
   const handleConfirmParsed = async () => {
     if (!parsedRequest) return;
 
     const finalRequest = { ...parsedRequest };
 
     if (editedShape) {
-      // ensure we store center as { lat, lng } and distance_to_edge in km
-      const [lng, lat] = editedShape.center.length === 2 ? editedShape.center : [editedShape.center[1], editedShape.center[0]];
-      finalRequest.location = { lat, lng };
+      const [lng, lat] = editedShape.center;
+      finalRequest.latitude = lat;
+      finalRequest.longitude = lng;
       finalRequest.distance_to_edge = editedShape.distance_to_edge;
+    } else if (parsedRequest.location) {
+      finalRequest.latitude = parsedRequest.location[0];
+      finalRequest.longitude = parsedRequest.location[1];
     }
 
+    finalRequest.region_name = parsedRequest.location_name || parsedRequest.region_name;
+    finalRequest.study_type = parsedRequest.study_type;
+    finalRequest.is_timeseries = parsedRequest.is_timeseries || false;
+    finalRequest.date_range_start = parsedRequest.date_range_start;
+    finalRequest.date_range_end = parsedRequest.date_range_end;
+    finalRequest.interval_length = parsedRequest.interval_length || 0;
+    delete finalRequest.location;
+
     try {
-      // example endpoint - replace with your real run endpoint
-      await api.post("/queries/run/", finalRequest);
-      setMessages((prev) => [...prev, { sender: "system", text: "Request submitted." }]);
+      const token = localStorage.getItem("access_token");
+      await api.post("/queries/parsed-request/", finalRequest, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setMessages(prev => [...prev, { sender: "system", text: "Request submitted successfully." }]);
       setParsedRequest(null);
       setEditedShape(null);
-      // TODO: optionally navigate to results page
     } catch (err) {
-      console.error("Run request failed:", err);
-      setMessages((prev) => [...prev, { sender: "system", text: "Failed to submit request." }]);
+      console.error(err);
+      setMessages(prev => [...prev, { sender: "system", text: "Failed to submit request." }]);
     }
   };
 
   const handleRejectParsed = () => {
     setParsedRequest(null);
     setEditedShape(null);
-    // keep messages; user can continue chatting
   };
 
   return (
     <div className="home-container">
-      <button
-        className="site-logo-btn"
-        onClick={() => (window.location.href = "/")}
-      >
+      <button className="site-logo-btn" onClick={() => (window.location.href = "/")}>
         <img src={logo} alt="MANZAR Logo" className="site-logo-img" />
       </button>
 
       <Map
+        key={parsedRequest ? JSON.stringify(parsedRequest.location) : "no-parsed"}
         query={query}
         setQuery={setQuery}
         suggestions={suggestions}
