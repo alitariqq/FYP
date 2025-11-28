@@ -1,29 +1,41 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "./api"; // <- your centralized Axios instance
+
+import Map from "../components/Map";
+import FloatingButtons from "../components/FloatingButtons";
+import GeminiPanel from "../components/GeminiPanel";
+
+import api from "../api";
+import logo from "../assets/logoText.png";
+import "../styles/Home.css";
 
 export default function Home() {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState([]); // chat messages
-  const [input, setInput] = useState(""); // current input
-  const [loading, setLoading] = useState(false);
 
-  // Check login on mount
+  // Redirect to login if not authenticated
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-    if (!token) {
-      navigate("/login");
-    }
+    if (!token) navigate("/login");
   }, [navigate]);
 
-  // Logout function
+  // Maintian map query and suggestions state
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+
+  // Maintain Gemini panel state
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Maintain options dropdown state
+  const [optionsOpen, setOptionsOpen] = useState(false);
+
+  // Logout handler
   const handleLogout = async () => {
     try {
-      // Optionally call backend to blacklist refresh token
       const refresh = localStorage.getItem("refresh_token");
-      if (refresh) {
-        await api.post("/auth/logout/", { refresh });
-      }
+      if (refresh) await api.post("/auth/logout/", { refresh });
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
@@ -33,19 +45,18 @@ export default function Home() {
     }
   };
 
-  // Send message to backend
+  // Gemini message send handler
   const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMessage = { sender: "user", text: input };
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    setMessages([...messages, userMessage]);
     setInput("");
     setLoading(true);
 
     try {
       const response = await api.post("/queries/chat/", {
-        messages: updatedMessages.map((msg) => ({
+        messages: [...messages, userMessage].map((msg) => ({
           role: msg.sender,
           content: msg.text,
         })),
@@ -55,104 +66,48 @@ export default function Home() {
       setMessages((prev) => [...prev, geminiMessage]);
     } catch (err) {
       console.error(err);
-      if (err.response && err.response.status === 401) {
-        // Token expired or invalid, force logout
-        handleLogout();
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "gemini", text: "Error: Could not get response." },
-        ]);
-      }
+      setMessages((prev) => [
+        ...prev,
+        { sender: "gemini", text: "Error: Could not get response." },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter") handleSend();
-  };
-
   return (
-    <div style={{ maxWidth: "600px", margin: "2rem auto", padding: "1rem" }}>
-      <h1>Chat with Gemini</h1>
+    <div className="home-container">
       <button
-        onClick={handleLogout}
-        style={{
-          float: "right",
-          padding: "0.3rem 0.5rem",
-          borderRadius: "4px",
-          border: "none",
-          backgroundColor: "#dc3545",
-          color: "#fff",
-          cursor: "pointer",
-        }}
+        className="site-logo-btn"
+        onClick={() => (window.location.href = "/")}
       >
-        Logout
+        <img src={logo} alt="MANZAR Logo" className="site-logo-img" />
       </button>
-      <div
-        style={{
-          border: "1px solid #ccc",
-          borderRadius: "8px",
-          padding: "1rem",
-          height: "400px",
-          overflowY: "auto",
-          marginBottom: "1rem",
-          clear: "both",
-        }}
-      >
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            style={{
-              textAlign: msg.sender === "user" ? "right" : "left",
-              margin: "0.5rem 0",
-            }}
-          >
-            <span
-              style={{
-                display: "inline-block",
-                padding: "0.5rem 1rem",
-                borderRadius: "12px",
-                backgroundColor: msg.sender === "user" ? "#007bff" : "#e5e5ea",
-                color: msg.sender === "user" ? "#fff" : "#000",
-              }}
-            >
-              {msg.text}
-            </span>
-          </div>
-        ))}
-        {loading && <p>Gemini is typing...</p>}
-      </div>
 
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyPress}
-        placeholder="Type your message..."
-        style={{
-          width: "80%",
-          padding: "0.5rem",
-          borderRadius: "4px",
-          border: "1px solid #ccc",
-        }}
+      <Map
+        query={query}
+        setQuery={setQuery}
+        suggestions={suggestions}
+        setSuggestions={setSuggestions}
       />
-      <button
-        onClick={handleSend}
-        style={{
-          width: "18%",
-          marginLeft: "2%",
-          padding: "0.5rem",
-          borderRadius: "4px",
-          border: "none",
-          backgroundColor: "#007bff",
-          color: "#fff",
-          cursor: "pointer",
-        }}
-      >
-        Send
-      </button>
+
+      <GeminiPanel
+        panelOpen={panelOpen}
+        setPanelOpen={setPanelOpen}
+        messages={messages}
+        input={input}
+        setInput={setInput}
+        handleSend={handleSend}
+        loading={loading}
+      />
+
+      <FloatingButtons
+        panelOpen={panelOpen}
+        setPanelOpen={setPanelOpen}
+        optionsOpen={optionsOpen}
+        setOptionsOpen={setOptionsOpen}
+        handleLogout={handleLogout}
+      />
     </div>
   );
 }

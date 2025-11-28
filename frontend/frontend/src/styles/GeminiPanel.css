@@ -1,0 +1,146 @@
+.gemini-panel {
+  position: fixed;
+  top: 0;
+  right: -400px;
+  width: 400px;
+  height: 100vh;
+  background: #153232;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  transition: right 0.3s ease;
+  z-index: 11;
+  font-family: sans-serif;
+  color: white;
+}
+
+.gemini-panel.open {
+  right: 0;
+}
+
+.gemini-close-btn {
+  position: absolute;
+  left: -50px;
+  top: 20px;
+  width: 30px;
+  height: 30px;
+  background: rgba(180, 180, 180, 0.3);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.gemini-close-btn:hover {
+  background: rgba(220, 220, 220, 0.5);
+}
+
+.gemini-header {
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.gemini-logo-header {
+  width: 50px;
+  height: 50px;
+}
+
+.gemini-messages {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gemini-msg.user {
+  align-self: flex-end;
+  background-color: #007bff;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 12px;
+  max-width: 80%;
+}
+
+.gemini-msg.gemini {
+  align-self: flex-start;
+  background-color: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 12px;
+  max-width: 80%;
+}
+
+.gemini-input-container {
+  display: flex;
+  padding: 12px;
+  border-top: 1px solid #444;
+  gap: 10px;
+}
+
+.gemini-textarea {
+  flex: 1;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #111;
+  font-family: sans-serif;
+  color: white;
+  resize: none;
+  overflow-y: auto;
+  max-height: 100px;
+  line-height: 1.4;
+}
+
+.gemini-send-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.gemini-send-btn img {
+  width: 24px;
+  height: 24px;
+}
+
+.gemini-welcome {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  text-align: center;
+  color: #fff;
+  padding: 20px;
+}
+
+.gemini-welcome-logo {
+  width: 80px;
+  margin-bottom: 16px;
+}
+
+.gemini-welcome h2 {
+  margin: 8px 0;
+  font-size: 20px;
+}
+
+.gemini-welcome p {
+  font-size: 14px;
+  color: #ccc;
+}

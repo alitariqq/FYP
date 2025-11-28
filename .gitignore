@@ -10,6 +10,7 @@ backend/venv/
 
 # Environment files
 backend/backend/backend/.env
+frontend/frontend/.env
 # OR relative to repo root:
 # ./.env
 

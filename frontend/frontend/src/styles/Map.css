@@ -1,0 +1,52 @@
+.map-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+
+.map-inner {
+  width: 100%;
+  height: 100%;
+}
+
+.map-search {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: #153232;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: white;
+  width: 300px;
+}
+
+.autocomplete-list {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  background: #153232;
+  color: white;
+  border-radius: 8px;
+  width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.autocomplete-list li {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.autocomplete-list li:hover {
+  background-color: #f0f0f0;
+}
