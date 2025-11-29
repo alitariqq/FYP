@@ -144,3 +144,67 @@
   font-size: 14px;
   color: #ccc;
 }
+
+/* --- FINISHED REQUEST UI --- */
+
+.gemini-finished {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 24px;
+  color: #fff;
+  animation: fadeIn 0.3s ease;
+}
+
+.gemini-finished h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.gemini-finished p {
+  font-size: 14px;
+  color: #cfcfcf;
+  margin-bottom: 26px;
+}
+
+.gemini-finished-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 250px;
+}
+
+.gemini-finished-actions .btn {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  background: #ffffff10;
+  color: white;
+  transition: 0.2s ease;
+}
+
+.gemini-finished-actions .btn:hover {
+  background: #ffffff25;
+}
+
+.gemini-finished-actions .btn.green {
+  background: #1f7f4c;
+}
+
+.gemini-finished-actions .btn.green:hover {
+  background: #28a765;
+}
+
+/* Fade animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}

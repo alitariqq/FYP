@@ -13,7 +13,7 @@ import "../styles/Home.css";
 export default function Home() {
   const navigate = useNavigate();
 
-  // Redirect to login if not authenticated
+  // Redirect if not authenticated
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) navigate("/login");
@@ -28,6 +28,7 @@ export default function Home() {
   const [parsedRequest, setParsedRequest] = useState(null);
   const [editedShape, setEditedShape] = useState(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [requestFinished, setRequestFinished] = useState(false);
 
   // Logout handler
   const handleLogout = async () => {
@@ -94,7 +95,6 @@ export default function Home() {
     }
   };
 
-  // Map updates shape
   const handleUpdateShape = update => setEditedShape(update);
 
   // Confirm parsed request
@@ -102,7 +102,6 @@ export default function Home() {
     if (!parsedRequest) return;
 
     const finalRequest = { ...parsedRequest };
-
     if (editedShape) {
       const [lng, lat] = editedShape.center;
       finalRequest.latitude = lat;
@@ -127,9 +126,10 @@ export default function Home() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setMessages(prev => [...prev, { sender: "system", text: "Request submitted successfully." }]);
+      // Mark as finished
       setParsedRequest(null);
       setEditedShape(null);
+      setRequestFinished(true);
     } catch (err) {
       console.error(err);
       setMessages(prev => [...prev, { sender: "system", text: "Failed to submit request." }]);
@@ -139,6 +139,11 @@ export default function Home() {
   const handleRejectParsed = () => {
     setParsedRequest(null);
     setEditedShape(null);
+  };
+
+  const handleNewRequest = () => {
+    setRequestFinished(false);
+    setMessages([]);
   };
 
   return (
@@ -165,6 +170,9 @@ export default function Home() {
         setInput={setInput}
         handleSend={handleSend}
         loading={loading}
+        requestFinished={requestFinished}
+        onGoRequests={() => navigate("/requests")}
+        onNewRequest={handleNewRequest}
       />
 
       <FloatingButtons

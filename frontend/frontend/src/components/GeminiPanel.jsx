@@ -11,6 +11,9 @@ export default function GeminiPanel({
   setInput,
   handleSend,
   loading,
+  requestFinished,
+  onGoRequests,
+  onNewRequest,
 }) {
   const handleKeyPress = (e) => {
     if (e.key === "Enter") handleSend();
@@ -28,35 +31,48 @@ export default function GeminiPanel({
         <img src={geminiLogo} alt="Gemini" className="gemini-logo-header" />
       </div>
 
-      {messages.length === 0 && (
-        <div className="gemini-welcome">
-          <img src={logo} alt="Site Logo" className="gemini-welcome-logo" />
-          <h2>Start Your Query</h2>
-          <p>Request Satellite Imagery Analysis for Any Location.</p>
-        </div>
-      )}
-
-      <div className="gemini-messages">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`gemini-msg ${msg.sender}`}>
-            {msg.text}
+      {requestFinished ? (
+        <div className="gemini-finished">
+          <h3>Request has been submitted!</h3>
+          <p>We will update you when your data is ready.</p>
+          <div className="gemini-finished-actions">
+            <button className="btn green" onClick={onGoRequests}>Requests</button>
+            <button className="btn" onClick={onNewRequest}>New Request</button>
           </div>
-        ))}
-        {loading && <div className="gemini-msg gemini">Gemini is typing...</div>}
-      </div>
+        </div>
+      ) : (
+        <>
+          {messages.length === 0 && (
+            <div className="gemini-welcome">
+              <img src={logo} alt="Site Logo" className="gemini-welcome-logo" />
+              <h2>Start Your Query</h2>
+              <p>Request Satellite Imagery Analysis for Any Location.</p>
+            </div>
+          )}
 
-      <div className="gemini-input-container">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder="Type a message..."
-          className="gemini-textarea"
-        />
-        <button className="gemini-send-btn" onClick={handleSend}>
-          <img src={sendArrow} alt="Send" />
-        </button>
-      </div>
+          <div className="gemini-messages">
+            {messages.map((msg, idx) => (
+              <div key={idx} className={`gemini-msg ${msg.sender}`}>
+                {msg.text}
+              </div>
+            ))}
+            {loading && <div className="gemini-msg gemini">Gemini is typing...</div>}
+          </div>
+
+          <div className="gemini-input-container">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="Type a message..."
+              className="gemini-textarea"
+            />
+            <button className="gemini-send-btn" onClick={handleSend}>
+              <img src={sendArrow} alt="Send" />
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
