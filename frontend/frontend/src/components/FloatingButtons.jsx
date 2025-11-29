@@ -2,6 +2,7 @@ import React from "react";
 import "../styles/FloatingButtons.css";
 import geminiLogo from "../assets/gemini_logo.png";
 import optionsIcon from "../assets/options.png";
+import { useNavigate } from "react-router-dom";
 
 export default function FloatingButtons({ 
   panelOpen,
@@ -10,6 +11,9 @@ export default function FloatingButtons({
   setOptionsOpen,
   handleLogout
 }) {
+
+  const navigate = useNavigate();
+
   return (
     !panelOpen && (
       <div className="floating-buttons">
@@ -24,7 +28,7 @@ export default function FloatingButtons({
         {optionsOpen && (
           <div className="options-menu">
             <p onClick={() => alert("Notifications coming soon!")}>Notifications</p>
-            <p onClick={() => alert("Requests coming soon!")}>Requests</p>
+            <p onClick={() => navigate("/requests")}>Requests</p>
             <p onClick={() => alert("Account settings coming soon!")}>Account Settings</p>
             <p className="logout" onClick={handleLogout}>Logout</p>
           </div>

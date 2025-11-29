@@ -68,3 +68,17 @@ def create_parsed_request(request):
         )
 
     return Response(serializer.errors, status=drf_status.HTTP_400_BAD_REQUEST)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_user_requests(request):
+    """
+    Returns all ParsedRequest objects for the logged-in user.
+    """
+    user = request.user
+
+    requests_qs = ParsedRequest.objects.filter(user=user).order_by("-submitted_at")
+
+    serializer = ParsedRequestSerializer(requests_qs, many=True)
+
+    return Response(serializer.data, status=drf_status.HTTP_200_OK)
