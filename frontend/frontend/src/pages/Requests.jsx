@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import api from "../api";
 import RequestsHeader from "../components/RequestsHeader";
-
 import "../styles/Requests.css";
 
 export default function Requests() {
   const navigate = useNavigate();
-
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [requests, setRequests] = useState([]);
   const [filter, setFilter] = useState("All");
@@ -18,15 +15,15 @@ export default function Requests() {
     const token = localStorage.getItem("access_token");
     if (!token) navigate("/login");
     fetchRequests();
-  }, []);
+  }, [navigate]);
 
   const fetchRequests = async () => {
     try {
       const token = localStorage.getItem("access_token");
-      const response = await api.get("/queries/my-requests/", {
+      const res = await api.get("/queries/my-requests/", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setRequests(response.data);
+      setRequests(res.data);
     } catch (err) {
       console.error(err);
     }
@@ -36,26 +33,40 @@ export default function Requests() {
     try {
       const refresh = localStorage.getItem("refresh_token");
       if (refresh) await api.post("/auth/logout/", { refresh });
-    } catch (err) {
-      console.error(err);
-    } finally {
+    } catch {}
+    finally {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
       navigate("/login");
     }
   };
 
-  // Filtering logic
-  const filteredRequests = requests.filter(req => {
+  const handleViewRequest = async (request_id) => {
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await api.get(`/deforestation/request/${request_id}/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Include parsed request coordinates for map
+      const result = {
+        ...res.data
+      };
+
+      navigate("/", { state: { deforestationResult: result } });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const filteredRequests = requests.filter((req) => {
     const matchesFilter =
       filter === "All" ||
       (filter === "Processing" && req.status !== "FINISHED") ||
       (filter === "Ready" && req.status === "FINISHED");
-
     const matchesSearch =
       req.region_name.toLowerCase().includes(search.toLowerCase()) ||
       req.study_type.toLowerCase().includes(search.toLowerCase());
-
     return matchesFilter && matchesSearch;
   });
 
@@ -66,43 +77,28 @@ export default function Requests() {
         setOptionsOpen={setOptionsOpen}
         handleLogout={handleLogout}
       />
-
       <div className="requests-wrapper">
-        {/* Search + Filters */}
         <div className="requests-header-bar">
           <input
             type="text"
             className="search-input"
             placeholder="Search requests..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
           />
-
           <div className="filter-buttons">
-            <button
-              className={`filter-btn ${filter === "All" ? "active" : ""}`}
-              onClick={() => setFilter("All")}
-            >
-              All
-            </button>
-
-            <button
-              className={`filter-btn ${filter === "Processing" ? "active" : ""}`}
-              onClick={() => setFilter("Processing")}
-            >
-              Processing
-            </button>
-
-            <button
-              className={`filter-btn ${filter === "Ready" ? "active" : ""}`}
-              onClick={() => setFilter("Ready")}
-            >
-              Ready
-            </button>
+            {["All", "Processing", "Ready"].map((f) => (
+              <button
+                key={f}
+                className={`filter-btn ${filter === f ? "active" : ""}`}
+                onClick={() => setFilter(f)}
+              >
+                {f}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Table wrapper */}
         <div className="table-container">
           {filteredRequests.length === 0 ? (
             <p className="no-requests">No matching requests.</p>
@@ -117,14 +113,12 @@ export default function Requests() {
                   <th>Actions</th>
                 </tr>
               </thead>
-
               <tbody>
-                {filteredRequests.map(req => (
+                {filteredRequests.map((req) => (
                   <tr key={req.request_id}>
                     <td>{req.region_name}</td>
                     <td>{req.study_type}</td>
                     <td>{new Date(req.submitted_at).toLocaleDateString()}</td>
-
                     <td>
                       <span
                         className={`status-badge ${
@@ -136,7 +130,6 @@ export default function Requests() {
                         {req.status === "FINISHED" ? "Ready" : "Processing"}
                       </span>
                     </td>
-
                     <td>
                       <button
                         className={
@@ -147,7 +140,7 @@ export default function Requests() {
                         disabled={req.status !== "FINISHED"}
                         onClick={() =>
                           req.status === "FINISHED" &&
-                          navigate(`/requests/${req.request_id}`)
+                          handleViewRequest(req.request_id)
                         }
                       >
                         View

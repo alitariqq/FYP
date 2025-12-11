@@ -9,6 +9,7 @@
 
 .parsed-card{
   background: white;
+  color: black;
   border-radius: 10px;
   padding: 16px;
   box-shadow: 0 6px 18px rgba(0,0,0,0.12);
@@ -18,6 +19,7 @@
   margin: 8px 0;
   display:flex;
   justify-content: space-between;
+  color:black;
   gap:8px;
 }
 
@@ -41,7 +43,8 @@
 }
 
 .btn.reject {
-  background: #f3f3f3;
+  background: #c0bcbc;
+  color: black;
 }
 
 .btn.confirm {

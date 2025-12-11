@@ -1,10 +1,12 @@
-import google.generativeai as genai
-from django.conf import settings
+# backend/queries/gemini.py
 from decouple import config
+from google.genai import Client
+from google.genai.types import GenerateContentConfig, GoogleSearch, Tool
 
-
-MODEL_NAME = "gemini-2.5-flash"
 GEMINI_API_KEY = config("GEMINI_API_KEY")
+
+# Use Gemini 2.5 Flash with online/web search
+MODEL_NAME = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = """
 You are MANZAR Query Parser.
@@ -20,11 +22,11 @@ RULES:
    - study_type
    - location_name
    - location (square center coordinates)
-   - distance_to_edge (in KM)
+   - distance_to_edge (in metres)
    - is_timeseries (boolean)
    - time_range
-   - date_range_start
-   - date_range_end
+   - date_range_start (Date should be format: YYYY-MM-DD, if user specifies only year or month, assume earliest date)
+   - date_range_end (Date should be format: YYYY-MM-DD, if user specifies only year or month, assume earliest date)
 
 3. Do NOT output the final JSON until everything is clear.
 4. When ready, output:
@@ -36,12 +38,8 @@ PARSED
 5. PARSED must be the FIRST LINE.
 """
 
-genai.configure(api_key=GEMINI_API_KEY)
-
-model = genai.GenerativeModel(
-    model_name=MODEL_NAME,
-    system_instruction=SYSTEM_PROMPT
-)
+# Create the client
+client = Client(api_key=GEMINI_API_KEY)
 
 def get_gemini_reply(history_messages):
     """
@@ -51,15 +49,31 @@ def get_gemini_reply(history_messages):
         ...
     ]
     """
+    # Start with SYSTEM_PROMPT as first message
+    contents = [{
+        "role": "user",  # system role works sometimes, but user is safest
+        "parts": [{"text": SYSTEM_PROMPT}]
+    }]
 
-    # Convert to Gemini’s expected format
-    converted = []
+    # Map DRF roles to Gemini roles
+    role_map = {"user": "user", "assistant": "model"}
     for msg in history_messages:
-        role = msg["role"]
-        if role == "user":
-            converted.append({"role": "user", "parts": [msg["content"]]})
-        else:
-            converted.append({"role": "model", "parts": [msg["content"]]})
+        contents.append({
+            "role": role_map.get(msg["role"], "user"),
+            "parts": [{"text": msg["content"]}]
+        })
 
-    response = model.generate_content(converted)
-    return response.text
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=contents,
+        config=GenerateContentConfig(
+            tools=[
+                Tool(
+                    google_search=GoogleSearch()
+                )
+            ]
+        )
+    )
+
+    # Return the first generated text
+    return response.candidates[0].content.parts[0].text

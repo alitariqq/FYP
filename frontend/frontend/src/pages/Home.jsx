@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import Map from "../components/Map";
 import FloatingButtons from "../components/FloatingButtons";
 import GeminiPanel from "../components/GeminiPanel";
 import ParsedRequestUI from "../components/ParsedRequestUI";
+import DeforestationPanel from "../components/DeforestationPanel";
 
 import api from "../api";
 import logo from "../assets/logoText.png";
@@ -12,13 +13,9 @@ import "../styles/Home.css";
 
 export default function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) navigate("/login");
-  }, [navigate]);
-
+  // States
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -29,6 +26,48 @@ export default function Home() {
   const [editedShape, setEditedShape] = useState(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [requestFinished, setRequestFinished] = useState(false);
+
+  // New states for deforestation panel + result
+  const [deforestationPanelOpen, setDeforestationPanelOpen] = useState(false);
+  const [deforestationResult, setDeforestationResult] = useState(null);
+  const [parsedRequestResult, setParsedRequestResult] = useState(null);
+
+  // Redirect if not authenticated and handle result from navigation
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    // Check if a deforestation result was passed via navigation or localStorage
+    let result = location.state?.deforestationResult || localStorage.getItem("deforestation_result");
+    if (result) {
+      // If localStorage, parse JSON
+      if (typeof result === "string") {
+        try {
+          result = JSON.parse(result);
+        } catch (err) {
+          console.error("Failed to parse deforestation_result from localStorage", err);
+          result = null;
+        }
+      }
+
+      // Unwrap deforestation_result if nested
+      console.log(result);
+      const unwrapped = result.deforestation_result || result;
+
+      const unwrappedRequest = result;
+
+      setDeforestationResult(unwrapped);
+      setParsedRequestResult(unwrappedRequest);
+      setDeforestationPanelOpen(true);
+
+      // Clear localStorage / navigation state
+      localStorage.removeItem("deforestation_result");
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, navigate]);
 
   // Logout handler
   const handleLogout = async () => {
@@ -126,7 +165,6 @@ export default function Home() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Mark as finished
       setParsedRequest(null);
       setEditedShape(null);
       setRequestFinished(true);
@@ -160,7 +198,14 @@ export default function Home() {
         setSuggestions={setSuggestions}
         parsedRequest={parsedRequest}
         onUpdateShape={handleUpdateShape}
+
+        // Pass the entire deforestationResult object
+        deforestationResult={parsedRequestResult}
+
+        deforestationPanelOpen={deforestationPanelOpen}
+        panelOpen={panelOpen}
       />
+
 
       <GeminiPanel
         panelOpen={panelOpen}
@@ -175,12 +220,22 @@ export default function Home() {
         onNewRequest={handleNewRequest}
       />
 
+      <DeforestationPanel
+        panelOpen={deforestationPanelOpen}
+        setPanelOpen={(open) => {
+          if (!open) setDeforestationResult(null);
+          setDeforestationPanelOpen(open);
+        }}
+        result={deforestationResult}
+      />
+
       <FloatingButtons
         panelOpen={panelOpen}
         setPanelOpen={setPanelOpen}
         optionsOpen={optionsOpen}
         setOptionsOpen={setOptionsOpen}
         handleLogout={handleLogout}
+        deforestationPanelOpen={deforestationPanelOpen}
       />
 
       {parsedRequest && (
