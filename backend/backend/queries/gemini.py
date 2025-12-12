@@ -21,7 +21,7 @@ RULES:
 2. Required JSON fields:
    - study_type
    - location_name
-   - location (square center coordinates)
+   - location (square center coordinates, always return latitutde and longitude as decimal not as a string)
    - distance_to_edge (in metres)
    - is_timeseries (boolean)
    - time_range
