@@ -34,12 +34,6 @@ export default function Home() {
 
   // Redirect if not authenticated and handle result from navigation
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     // Check if a deforestation result was passed via navigation or localStorage
     let result = location.state?.deforestationResult || localStorage.getItem("deforestation_result");
     if (result) {
