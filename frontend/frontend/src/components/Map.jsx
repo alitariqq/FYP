@@ -3,6 +3,8 @@ import mapboxgl from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import "../styles/Map.css";
+import MapControls from "./mapControls/MapControls";
+
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -25,6 +27,7 @@ export default function Map({
   const drawRef = useRef(null);
   const featureIdRef = useRef(null);
 
+  const [mapReady, setMapReady] = useState(false);
   const [activeOverlay, setActiveOverlay] = useState("change");
 
   // Convert meters to lat/lng degrees
@@ -104,6 +107,10 @@ export default function Map({
       style: "mapbox://styles/mapbox/satellite-streets-v12",
       center: [74.303056, 31.481111],
       zoom: 12,
+    });
+
+    mapRef.current.on("load", () => {
+      setMapReady(true);
     });
 
     mapRef.current.addControl(new mapboxgl.NavigationControl());
@@ -295,6 +302,8 @@ export default function Map({
           <button className={activeOverlay === "change" ? "active" : ""} onClick={() => setActiveOverlay("change")}>Change</button>
         </div>
       )}
+
+      {mapReady && <MapControls map={mapRef.current} />}
 
       <div ref={mapContainer} className="map-inner" />
     </div>
