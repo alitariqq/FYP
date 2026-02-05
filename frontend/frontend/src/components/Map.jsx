@@ -101,7 +101,7 @@ export default function Map({
 
     mapRef.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/satellite-v9",
+      style: "mapbox://styles/mapbox/satellite-streets-v12",
       center: [74.303056, 31.481111],
       zoom: 12,
     });
