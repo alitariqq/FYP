@@ -4,7 +4,7 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import "../styles/Map.css";
 import MapControls from "./mapControls/MapControls";
-
+import { v4 as uuidv4 } from "uuid";
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -250,30 +250,106 @@ export default function Map({
     }
   }, [deforestationResult, deforestationPanelOpen, activeOverlay]);
 
-  // Search box
+  //Search Box & Autocomplete using Google Places API
+  const sessionTokenRef = useRef(uuidv4());
   const handleChange = async (e) => {
-    const value = e.target.value;
-    setQuery(value);
-    if (!value) return setSuggestions([]);
+    const input = e.target.value;
+    setQuery(input);
+
+    if (!input) {
+      setSuggestions([]);
+      return;
+    }
+
     try {
-      const res = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-          value
-        )}.json?autocomplete=true&limit=5&country=pk&access_token=${mapboxgl.accessToken}`
+      const response = await fetch(
+        "https://places.googleapis.com/v1/places:autocomplete",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": import.meta.env.VITE_GOOGLE_MAPS_KEY,
+            "X-Goog-FieldMask":
+              "suggestions.placePrediction.text,suggestions.placePrediction.placeId,suggestions.queryPrediction.text.text",
+          },
+          body: JSON.stringify({
+            input,
+            includeQueryPredictions: true,
+            sessionToken: sessionTokenRef.current,
+          }),
+        }
       );
-      const data = await res.json();
-      setSuggestions(data.features || []);
+
+      const data = await response.json();
+
+      const formatted = (data.suggestions || [])
+        .map((s) => {
+          if (s.placePrediction) {
+            return {
+              id: s.placePrediction.placeId, // required for Place Details
+              text: s.placePrediction.text.text,
+              type: "place",
+            };
+          }
+          if (s.queryPrediction) {
+            return {
+              id: s.queryPrediction.text.text,
+              text: s.queryPrediction.text.text,
+              type: "query",
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      setSuggestions(formatted);
     } catch (err) {
-      console.error(err);
+      console.error("Autocomplete REST error:", err);
+      setSuggestions([]);
     }
   };
 
-  const handleSelect = (feature) => {
-    if (!feature?.center) return;
-    const [lng, lat] = feature.center;
-    mapRef.current.flyTo({ center: [lng, lat], zoom: 12 });
-    setQuery(feature.place_name);
-    setSuggestions([]);
+  //Handle Select for autocomplete suggestion
+  const handleSelect = async (prediction) => {
+    if (prediction.type === "query") {
+      setQuery(prediction.text);
+      setSuggestions([]);
+      return;
+    }
+
+    const placeId = prediction.id;
+    if (!placeId) {
+      console.warn("No placeId for selected prediction:", prediction);
+      return;
+    }
+
+    try {
+      const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+      const FIELD_MASK = "location";
+      const url = `https://places.googleapis.com/v1/places/${placeId}?fields=${FIELD_MASK}`;
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": API_KEY,
+          "X-Goog-FieldMask": FIELD_MASK,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!data.location) return console.error("No location returned:", data);
+
+      const { latitude, longitude } = data.location;
+
+      mapRef.current?.flyTo({ center: [longitude, latitude], zoom: 14 });
+      setQuery(prediction.text);
+      setSuggestions([]);
+      onUpdateShape({ center: [longitude, latitude], distance_to_edge: 2000 });
+    } catch (err) {
+      console.error("Error fetching place details:", err);
+    }
   };
 
   return (
@@ -287,9 +363,9 @@ export default function Map({
       />
       {suggestions.length > 0 && (
         <ul className="autocomplete-list">
-          {suggestions.map((f) => (
-            <li key={f.id} onClick={() => handleSelect(f)}>
-              {f.place_name}
+          {suggestions.map((f, idx) => (
+            <li key={(f.placePrediction?.placeId || f.text) + idx} onClick={() => handleSelect(f)}>
+              {f.text}
             </li>
           ))}
         </ul>
