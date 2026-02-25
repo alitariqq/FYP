@@ -41,23 +41,39 @@ export default function Requests() {
     }
   };
 
-  const handleViewRequest = async (request_id) => {
+  const handleViewRequest = async (request_id, study_type) => {
     try {
       const token = localStorage.getItem("access_token");
-      const res = await api.get(`/deforestation/request/${request_id}/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      let res;
 
-      // Include parsed request coordinates for map
-      const result = {
-        ...res.data
-      };
+      if (study_type.toLowerCase() === "deforestation") {
+        res = await api.get(`/deforestation/request/${request_id}/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else if (study_type.toLowerCase() === "lulc") {
+        res = await api.get(`/lulc/studies/by-parsed-request/${request_id}/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else {
+        console.error("Unknown study type:", study_type);
+        return;
+      }
 
-      navigate("/", { state: { deforestationResult: result } });
+      const result = res.data;
+
+      //Study type:
+      if (study_type.toLowerCase() === "deforestation") {
+        navigate("/", { state: { deforestationResult: result } });
+      } else if (study_type.toLowerCase() === "lulc") {
+        navigate("/", { state: { lulcResult: result } });
+      }
+
+
     } catch (err) {
       console.error(err);
     }
   };
+
 
   const filteredRequests = requests.filter((req) => {
     const matchesFilter =
@@ -140,7 +156,7 @@ export default function Requests() {
                         disabled={req.status !== "FINISHED"}
                         onClick={() =>
                           req.status === "FINISHED" &&
-                          handleViewRequest(req.request_id)
+                          handleViewRequest(req.request_id, req.study_type)
                         }
                       >
                         View

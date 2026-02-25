@@ -1,0 +1,242 @@
+.lulc-panel {
+  position: fixed;
+  top: 0;
+  right: -380px;
+  width: 380px;
+  height: 100vh;
+
+  background: #1b2c2c;
+  backdrop-filter: blur(16px);
+
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: -10px 0 40px rgba(0,0,0,0.6);
+
+  transition: right 0.35s ease;
+  color: #e8e8e8;
+
+  display: flex;
+  flex-direction: column;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.lulc-panel.open {
+  right: 0;
+}
+
+/* header */
+.lulc-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  padding: 12px 0;
+  position: relative;
+}
+
+.lulc-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+
+/* content */
+.lulc-content {
+  padding: 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* controls */
+.lulc-controls,
+.chart-options {
+  display: flex;
+  gap: 8px;
+}
+
+select,
+button {
+  background: #1f252a;
+  border: 1px solid #2c3338;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* cards */
+.lulc-card {
+  background: #15191d;
+  padding: 14px;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+
+.lulc-card h4 {
+  margin-bottom: 10px;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+/* metrics */
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.metric-card {
+  background: #1e2428;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* text */
+.summary {
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+/* close */
+.lulc-close-btn {
+  position: absolute;
+  left: -40px;
+  top: 16px;
+
+  width: 32px;
+  height: 32px;
+
+  border-radius: 50%;
+  background: #1f252a;
+  border: none;
+  color: white;
+
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+}
+
+.lulc-panel {
+  width: 420px;
+  right: -420px;
+}
+
+/*Pie Chart CSS*/
+
+.pie-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 10px;
+  overflow: visible;
+}
+
+.pie-legend {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.85;
+}
+
+.legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+/*KPI Cards*/
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.metric-card {
+  background: linear-gradient(
+    145deg,
+    #1e2428,
+    #161b1f
+  );
+
+  padding: 14px 16px;
+  border-radius: 14px;
+
+  display: flex;
+  flex-direction: column;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    0 6px 18px rgba(0,0,0,0.5);
+}
+
+/* small label */
+.metric-label {
+  font-size: 11px;
+  opacity: 0.6;
+  text-transform: capitalize;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+/* card breathing room */
+.lulc-card {
+  padding: 18px;
+}
+
+/* scroll friendliness */
+.lulc-content {
+  padding-bottom: 40px;
+}
+
+/* center donut label */
+.pie-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.pie-center {
+  position: absolute;
+  text-align: center;
+  pointer-events: none;
+}
+
+.pie-total {
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.pie-sub {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* cleaner charts */
+.recharts-cartesian-grid line {
+  display: none !important;
+}
+

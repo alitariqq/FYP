@@ -29,6 +29,8 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path("auth/logout/", LogoutView.as_view(), name="auth_logout"),
     path('api/deforestation/', include('deforestation.urls')),
+    path('api/lulc/', include('lulc.urls')),
+
 ]
 
 if settings.DEBUG:

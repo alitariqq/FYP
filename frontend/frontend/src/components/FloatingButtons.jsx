@@ -10,13 +10,14 @@ export default function FloatingButtons({
   optionsOpen,
   setOptionsOpen,
   handleLogout,
-  deforestationPanelOpen
+  deforestationPanelOpen,
+  lulcPanelOpen
 }) {
 
   const navigate = useNavigate();
 
   return (
-    !panelOpen && !deforestationPanelOpen && (
+    !panelOpen && !deforestationPanelOpen && !lulcPanelOpen && (
       <div className="floating-buttons">
         <button className="gemini-toggle-btn" onClick={() => setPanelOpen(true)}>
           <img src={geminiLogo} alt="Gemini" className="gemini-logo-btn" />

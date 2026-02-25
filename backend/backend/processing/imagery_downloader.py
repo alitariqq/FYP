@@ -1,24 +1,21 @@
-import os
-import requests
-import shutil
-import numpy as np
-import rasterio
-from rasterio.mask import mask
-from rasterio.warp import reproject, Resampling
-from shapely.geometry import box
+import pystac_client
+import planetary_computer
+import stackstac
 import pyproj
+import numpy as np
+import xarray as xr
+from shapely.geometry import box, mapping
 from shapely.ops import transform
+from dask.diagnostics import ProgressBar
+import rioxarray
+import os
+from scipy.ndimage import median_filter
+from scipy.spatial import cKDTree
+from typing import Tuple, List
+import time
 from pathlib import Path
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
-# ==========================================
-# 1. AUTH + CONFIG
-# ==========================================
-CLIENT_ID="sh-68f61fde-814f-4f17-bcdc-df2576c9ae2a"
-CLIENT_SECRET="Z7J0TDPNmzLI8FCntxZ4D422khZDV8Lc"
 
-TARGET_BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B8A", "B11", "B12"]
 
 OUTPUT_BASE = Path("./data")
 OUTPUT_BEFORE = OUTPUT_BASE / "Amazon_Before"
@@ -27,254 +24,145 @@ OUTPUT_BEFORE.mkdir(parents=True, exist_ok=True)
 OUTPUT_AFTER.mkdir(parents=True, exist_ok=True)
 
 # ==========================================
-# 2. SESSION CLASS
+# 1. PIXEL-PERFECT UTM ALIGNMENT
 # ==========================================
-class CDSESession:
-    def __init__(self):
-        self.token = None
-        self.session = requests.Session()
-
-        retries = Retry(
-            total=5,
-            backoff_factor=1,
-            status_forcelist=[500, 502, 503, 504]
-        )
-        self.session.mount("https://", HTTPAdapter(max_retries=retries))
-
-        self.authenticate()
-
-    def authenticate(self):
-        url = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
-        payload = {
-            "grant_type": "client_credentials",
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-        }
-        try:
-            r = self.session.post(url, data=payload, timeout=30)
-            r.raise_for_status()
-            self.token = r.json()["access_token"]
-            self.session.headers.update({"Authorization": f"Bearer {self.token}"})
-        except Exception as e:
-            print(f"❌ Auth failed: {e}")
-            raise e
-
-    def get(self, url, **kwargs):
-        if "timeout" not in kwargs:
-            kwargs["timeout"] = 60
-
-        try:
-            r = self.session.get(url, **kwargs)
-
-            # Token expired → re-auth
-            if r.status_code in (401, 403):
-                self.authenticate()
-                r = self.session.get(url, **kwargs)
-
-            return r
-        except Exception:
-            return None
-
-
-API = CDSESession()
+def get_utm_params(lat: float, lon: float, radius_km: float):
+    """Aligns target coordinates with the 10m Sentinel-2 pixel grid."""
+    utm_zone = int((lon + 180) / 6) + 1
+    epsg = 32600 + utm_zone
+    wgs84, utm = pyproj.CRS("EPSG:4326"), pyproj.CRS.from_epsg(epsg)
+    to_utm = pyproj.Transformer.from_crs(wgs84, utm, always_xy=True).transform
+    to_wgs = pyproj.Transformer.from_crs(utm, wgs84, always_xy=True).transform
+    x_c, y_c = to_utm(lon, lat)
+    x_c, y_c = round(x_c / 10) * 10, round(y_c / 10) * 10
+    r_m = radius_km * 1000
+    utm_bounds = (x_c - r_m, y_c - r_m, x_c + r_m, y_c + r_m)
+    wgs_geom = mapping(transform(to_wgs, box(*utm_bounds)))
+    return utm_bounds, epsg, wgs_geom
 
 # ==========================================
-# 3. SEARCH
+# 2. SPATIAL HEALING & FILTERING
 # ==========================================
-def get_candidates(lat, lon, start_date, end_date):
-    base = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
-    delta = 0.02
-
-    poly_str = (
-        f"{lon-delta} {lat-delta}, {lon+delta} {lat-delta}, "
-        f"{lon+delta} {lat+delta}, {lon-delta} {lat+delta}, "
-        f"{lon-delta} {lat-delta}"
-    )
-
-    def search(ptype):
-        filt = (
-            f"Collection/Name eq 'SENTINEL-2' and "
-            f"Attributes/OData.CSC.StringAttribute/any(a:a/Name eq 'productType' "
-            f"and a/OData.CSC.StringAttribute/Value eq '{ptype}') and "
-            f"ContentDate/Start gt {start_date}T00:00:00.000Z and "
-            f"ContentDate/Start lt {end_date}T00:00:00.000Z and "
-            f"OData.CSC.Intersects(area=geography'SRID=4326;POLYGON(({poly_str}))')"
-        )
-
-        params = {"$filter": filt, "$top": 20, "$orderby": "ContentDate/Start asc", "$expand": "Attributes"}
-
-        r = API.get(base, params=params)
-        if r and r.status_code == 200:
-            return r.json().get("value", [])
-        return []
-
-    products = search("S2MSI2A")
-    if not products:
-        products = search("S2MSI1C")
-    if not products:
-        return []
-
-    return sorted(
-        products,
-        key=lambda x: float(
-            next((a["Value"] for a in x["Attributes"] if a["Name"] == "cloudCover"), 100)
-        ),
-    )
-
+def heal_missing_pixels(data: xr.DataArray, max_distance: int = 150) -> xr.DataArray:
+    """Fills NoData voids using cKDTree nearest neighbor interpolation."""
+    data_interp = data.copy()
+    for band_idx in range(data.shape[0]):
+        band_data = data[band_idx].values
+        if np.any(np.isnan(band_data)):
+            mask = ~np.isnan(band_data)
+            valid_coords = np.argwhere(mask)
+            invalid_coords = np.argwhere(~mask)
+            if len(valid_coords) > 0 and len(invalid_coords) > 0:
+                tree = cKDTree(valid_coords)
+                dist, idx = tree.query(invalid_coords, k=1)
+                fill_mask = dist < max_distance
+                band_data[~mask] = np.where(fill_mask, band_data[mask][idx], np.nan)
+            data_interp[band_idx].values = band_data
+    return data_interp
 
 # ==========================================
-# 4. DOWNLOAD + CROP + STACK
+# 3. MASTER DOWNLOADER (CONFLICT FIXED)
 # ==========================================
-def process_product(product, lat, lon, out_dir, target_filename):
-    out_dir = Path(out_dir)
-    name = product["Name"]
-    prod_id = product["Id"]
+def download_perfect_imagery(lat: float, lon: float, radius_km: float, target_year: int, label: str, output_dir: str):
+    start_time = time.time()
+    print(f"\n{'='*70}\n🚀 PROCESSING: {label.upper()} ({target_year})\n{'='*70}")
+    
 
-    zip_path = out_dir / f"{name}.zip"
-    final = out_dir / target_filename
-    temp_dir = out_dir / f"temp_{name}"
+    utm_bounds, epsg, wgs_geom = get_utm_params(lat, lon, radius_km)
+    catalog = pystac_client.Client.open("https://planetarycomputer.microsoft.com/api/stac/v1", 
+                                        modifier=planetary_computer.sign_inplace)
 
-    # Already downloaded?
-    if final.exists() and final.stat().st_size > 1_000_000:
-        return True
+    # Recursive fallback strategy for cloudy regions like Brazil
+    items = []
+    strategies = [
+        (20, "sentinel-2-l2a", 0), (50, "sentinel-2-l2a", 0),
+        (80, "sentinel-2-l2a", 0), (80, "sentinel-2-l1c", 0),
+        (80, "sentinel-2-l2a", -1)
+    ]
 
-    if final.exists():
-        final.unlink()
+    for cloud_limit, coll, yr_off in strategies:
+        search_year = target_year + yr_off
+        if lat >= 0: dr = f"{search_year}-05-01/{search_year}-10-31"
+        else: dr = f"{search_year}-11-01/{search_year + 1}-01-31"
 
-    try:
-        # Download
-        url = f"https://catalogue.dataspace.copernicus.eu/odata/v1/Products({prod_id})/$value"
-        r = API.get(url, stream=True, allow_redirects=False)
-        if not r:
-            return False
+        search = catalog.search(collections=[coll], intersects=wgs_geom, datetime=dr,
+                                query={"eo:cloud_cover": {"lt": cloud_limit}},
+                                sortby=[{"field": "properties.eo:cloud_cover", "direction": "asc"}])
+        items = list(search.items())
+        if len(items) >= 10: break
 
-        # Redirect
-        if r.status_code in (301, 302, 303, 307, 308):
-            r = API.get(r.headers["Location"], stream=True)
+    if not items: return print(f"❌ No data found for {label} in {target_year}.")
 
-        if not r or r.status_code != 200:
-            return False
+    n_stack = min(20, len(items))
+    print(f"   [LOG] Mosaicking top {n_stack} scenes for ultimate clarity...")
+    
+    processed_slices = []
+    reflectance_bands = ["B02", "B03", "B04", "B08", "B11", "B12"]
 
-        # Save ZIP
-        with open(zip_path, "wb") as f:
-            for chunk in r.iter_content(1024 * 1024):
-                if chunk:
-                    f.write(chunk)
+    for i, item in enumerate(items[:n_stack]):
+        slice_cube = stackstac.stack(item, assets=reflectance_bands + ["SCL"],
+                                    bounds=utm_bounds, epsg=epsg, resolution=10,
+                                    dtype="float64", rescale=True, fill_value=np.nan).squeeze()
+        
+        # Radiometric Harmonization: Forces color consistency
+        pb = item.properties.get("s2:processing_baseline", "02.00")
+        if (float(pb) >= 4.0 if pb.replace('.','',1).isdigit() else pb >= "04.00"):
+            slice_cube.loc[dict(band=reflectance_bands)] -= 0.1
 
-        # Extract
-        shutil.unpack_archive(zip_path, temp_dir)
+        # Cloud & Artifact Masking
+        if "SCL" in slice_cube.band.values:
+            mask = slice_cube.sel(band="SCL").isin([0, 1, 3, 8, 9, 10])
+            slice_cube = slice_cube.sel(band=reflectance_bands).where(~mask)
+        
+        processed_slices.append(slice_cube.sel(band=reflectance_bands))
 
-        # Find JP2 bands
-        band_paths = {}
-        for f in temp_dir.rglob("*.jp2"):
-            for b in TARGET_BANDS:
-                if f"_{b}_" in f.name or f.name.endswith(f"_{b}.jp2"):
-                    band_paths[b] = f
+    # FIXED CONCATENATION: Added coords='minimal' to solve the coordinate conflict
+    cube = xr.concat(processed_slices, dim="time", 
+                     coords='minimal', 
+                     compat='override', 
+                     combine_attrs='override', 
+                     join='override')
 
-        if len(band_paths) < 9:
-            return False
+    print("   [LOG] Computing Median Composite (Streaming Data)...")
+    with ProgressBar():
+        data = cube.median(dim="time", skipna=True).compute().astype("float32")
+    
+    data = data.where(data >= 0, 0).rio.write_nodata(np.nan).rio.write_crs(f"EPSG:{epsg}")
+    data = heal_missing_pixels(data)
+    for b in range(data.shape[0]):
+        data[b].values = median_filter(data[b].values, size=3)
 
-        # 20 km crop
-        delta_deg = (20.0 / 111.0) / 2.0
-        geom = box(lon - delta_deg, lat - delta_deg, lon + delta_deg, lat + delta_deg)
-
-        ref_band = band_paths["B02"]
-
-        with rasterio.open(ref_band) as src:
-            transform_fn = pyproj.Transformer.from_crs(
-                pyproj.CRS("EPSG:4326"), src.crs, always_xy=True
-            ).transform
-            utm_geom = transform(transform_fn, geom)
-
-            try:
-                ref_img, ref_tf = mask(src, [utm_geom], crop=True)
-            except Exception:
-                return False
-
-            # Empty/black check
-            if ref_img.shape[1] < 100 or np.max(ref_img) == 0:
-                return False
-
-            out_meta = src.meta.copy()
-            out_meta.update(
-                {
-                    "driver": "GTiff",
-                    "height": ref_img.shape[1],
-                    "width": ref_img.shape[2],
-                    "transform": ref_tf,
-                    "count": 9,
-                    "dtype": "float32",
-                }
-            )
-
-        ref_h, ref_w = ref_img.shape[1], ref_img.shape[2]
-
-        # Stack
-        stack = []
-        for b in TARGET_BANDS:
-            with rasterio.open(band_paths[b]) as src:
-                d, _ = mask(src, [utm_geom], crop=True)
-                if d.shape[1] != ref_h:
-                    dst = np.zeros((ref_h, ref_w), dtype="float32")
-                    reproject(
-                        d[0],
-                        dst,
-                        src_transform=src.transform,
-                        src_crs=src.crs,
-                        dst_transform=out_meta["transform"],
-                        dst_crs=out_meta["crs"],
-                        resampling=Resampling.bilinear,
-                    )
-                    stack.append(dst)
-                else:
-                    stack.append(d[0].astype("float32"))
-
-        # Save final
-        with rasterio.open(final, "w", **out_meta) as dest:
-            dest.write(np.stack(stack))
-
-        return True
-
-    except Exception:
-        return False
-
-    finally:
-        if temp_dir.exists():
-            shutil.rmtree(temp_dir)
-        if zip_path.exists():
-            try:
-                zip_path.unlink()
-            except:
-                pass
-
+    filename = os.path.join(output_dir)
+    data.rio.to_raster(filename, compress="LZW", tiled=True, nodata=np.nan)
+    print(f"✅ SUCCESS: {filename} ({time.time() - start_time:.1f}s)\n")
 
 # ==========================================
-# 5. MAIN SINGLE FUNCTION FOR CELERY
+# EXECUTION
 # ==========================================
 def download_pair(lat, lon, location_id):
-    """
-    Returns:
-        (before_path, after_path)
-    """
+
     before_name = f"{location_id}_BEFORE.tif"
     after_name = f"{location_id}_AFTER.tif"
-
     before_path = OUTPUT_BEFORE / before_name
     after_path = OUTPUT_AFTER / after_name
 
-    # BEFORE (2019)
-    if not before_path.exists():
-        cands = get_candidates(lat, lon, "2019-01-01", "2019-12-31")
-        for p in cands[:10]:
-            if process_product(p, lat, lon, OUTPUT_BEFORE, before_name):
-                break
+    
+    locations = [
+        (lat, lon, 2.56, 2018, before_name), (lat, lon, 2.56, 2024, after_name),
+    ]
+    
+    
+    # First download
+    try:
+        download_perfect_imagery(lat, lon, 2.56, 2018, before_name, before_path)
+    except Exception as e:
+        print(f"❌ [FATAL] {before_name} (2018): {str(e)}")
 
-    # AFTER (2023)
-    if not after_path.exists():
-        cands = get_candidates(lat, lon, "2023-01-01", "2023-12-31")
-        for p in cands[:10]:
-            if process_product(p, lat, lon, OUTPUT_AFTER, after_name):
-                break
+    # Second download
+    try:
+        download_perfect_imagery(lat, lon, 2.56, 2024, after_name, after_path)
+    except Exception as e:
+        print(f"❌ [FATAL] {after_name} (2024): {str(e)}")
 
     if before_path.exists() and after_path.exists():
         return str(before_path), str(after_path)

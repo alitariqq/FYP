@@ -6,6 +6,7 @@ import FloatingButtons from "../components/FloatingButtons";
 import GeminiPanel from "../components/GeminiPanel";
 import ParsedRequestUI from "../components/ParsedRequestUI";
 import DeforestationPanel from "../components/DeforestationPanel";
+import LULCPanel from "../components/LULCPanel";
 
 import api from "../api";
 import logo from "../assets/logoText.png";
@@ -32,36 +33,75 @@ export default function Home() {
   const [deforestationResult, setDeforestationResult] = useState(null);
   const [parsedRequestResult, setParsedRequestResult] = useState(null);
 
+  //New states for LULC Panel
+  const [lulcPanelOpen, setLulcPanelOpen] = useState(false);
+  const [lulcResult, setLulcResult] = useState(null);
+  const [selectedLulcYearIndex, setSelectedLulcYearIndex] = useState(0);
+
+
+  // old Use effect working for deforestation
   // Redirect if not authenticated and handle result from navigation
+  // useEffect(() => {
+  //   // Check if a deforestation result was passed via navigation or localStorage
+  //   let result = location.state?.deforestationResult || localStorage.getItem("deforestation_result");
+  //   if (result) {
+  //     // If localStorage, parse JSON
+  //     if (typeof result === "string") {
+  //       try {
+  //         result = JSON.parse(result);
+  //       } catch (err) {
+  //         console.error("Failed to parse deforestation_result from localStorage", err);
+  //         result = null;
+  //       }
+  //     }
+
+  //     // Unwrap deforestation_result if nested
+  //     console.log(result);
+  //     const unwrapped = result.deforestation_result || result;
+
+  //     const unwrappedRequest = result;
+
+  //     setDeforestationResult(unwrapped);
+  //     setParsedRequestResult(unwrappedRequest);
+  //     setDeforestationPanelOpen(true);
+
+  //     // Clear localStorage / navigation state
+  //     localStorage.removeItem("deforestation_result");
+  //     window.history.replaceState({}, document.title);
+  //   }
+  // }, [location.state, navigate]);
+
+  //new use effect: LULC + Deforestation:
   useEffect(() => {
-    // Check if a deforestation result was passed via navigation or localStorage
-    let result = location.state?.deforestationResult || localStorage.getItem("deforestation_result");
-    if (result) {
-      // If localStorage, parse JSON
-      if (typeof result === "string") {
+    let deforestation = location.state?.deforestationResult;
+    let lulc = location.state?.lulcResult;
+    if (deforestation) {
+      if (typeof deforestation === "string") {
         try {
-          result = JSON.parse(result);
-        } catch (err) {
-          console.error("Failed to parse deforestation_result from localStorage", err);
-          result = null;
+          deforestation = JSON.parse(deforestation);
+        } catch {
+          deforestation = null;
         }
       }
 
-      // Unwrap deforestation_result if nested
-      console.log(result);
-      const unwrapped = result.deforestation_result || result;
-
-      const unwrappedRequest = result;
+      const unwrapped = deforestation.deforestation_result || deforestation;
 
       setDeforestationResult(unwrapped);
-      setParsedRequestResult(unwrappedRequest);
+      setParsedRequestResult(deforestation);
       setDeforestationPanelOpen(true);
-
-      // Clear localStorage / navigation state
-      localStorage.removeItem("deforestation_result");
-      window.history.replaceState({}, document.title);
     }
-  }, [location.state, navigate]);
+    if (lulc) {
+      // backend returns array, take first study
+      const study = Array.isArray(lulc) ? lulc[0] : lulc;
+
+      setLulcResult(study);
+      setLulcPanelOpen(true);
+    }
+
+    window.history.replaceState({}, document.title);
+  }, [location.state]);
+
+
 
   // Logout handler
   const handleLogout = async () => {
@@ -198,6 +238,11 @@ export default function Home() {
 
         deforestationPanelOpen={deforestationPanelOpen}
         panelOpen={panelOpen}
+
+        //lulc stuff:
+        lulcResult={lulcResult}
+        selectedLulcYearIndex={selectedLulcYearIndex}
+        lulcPanelOpen={lulcPanelOpen}
       />
 
 
@@ -223,6 +268,18 @@ export default function Home() {
         result={deforestationResult}
       />
 
+      <LULCPanel
+        panelOpen={lulcPanelOpen}
+        setPanelOpen={(open) => {
+          if (!open) setLulcResult(null);
+          setLulcPanelOpen(open);
+        }}
+        result={lulcResult}
+        selectedYearIndex={selectedLulcYearIndex}
+        setSelectedYearIndex={setSelectedLulcYearIndex}
+      />
+
+
       <FloatingButtons
         panelOpen={panelOpen}
         setPanelOpen={setPanelOpen}
@@ -230,6 +287,7 @@ export default function Home() {
         setOptionsOpen={setOptionsOpen}
         handleLogout={handleLogout}
         deforestationPanelOpen={deforestationPanelOpen}
+        lulcPanelOpen={lulcPanelOpen}
       />
 
       {parsedRequest && (

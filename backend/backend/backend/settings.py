@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "accounts",
     "queries",
     "deforestation",
+    "lulc",
 ]
 
 REST_FRAMEWORK = {

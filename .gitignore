@@ -13,7 +13,7 @@ backend/backend/backend/.env
 frontend/frontend/.env
 # OR relative to repo root:
 # ./.env
-
+backend/backend/data/
 # Django stuff
 *.log
 *.pot
@@ -38,3 +38,6 @@ static/
 # Node / frontend stuff if using Vite
 frontend/node_modules/
 dist/
+
+*.pt
+*.pth
