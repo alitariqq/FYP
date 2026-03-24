@@ -4,20 +4,21 @@ import geminiLogo from "../assets/gemini_logo.png";
 import optionsIcon from "../assets/options.png";
 import { useNavigate } from "react-router-dom";
 
-export default function FloatingButtons({ 
+export default function FloatingButtons({
   panelOpen,
   setPanelOpen,
   optionsOpen,
   setOptionsOpen,
   handleLogout,
   deforestationPanelOpen,
-  lulcPanelOpen
+  lulcPanelOpen,
+  manualRequestPanelOpen
 }) {
 
   const navigate = useNavigate();
 
   return (
-    !panelOpen && !deforestationPanelOpen && !lulcPanelOpen && (
+    !panelOpen && !deforestationPanelOpen && !lulcPanelOpen && !manualRequestPanelOpen && (
       <div className="floating-buttons">
         <button className="gemini-toggle-btn" onClick={() => setPanelOpen(true)}>
           <img src={geminiLogo} alt="Gemini" className="gemini-logo-btn" />

@@ -2,7 +2,7 @@ import "../../styles/MapControls.css";
 import LayerControl from "./LayerControl";
 import locationsIcon from "../../assets/Location.png";
 
-export default function MapControls({ map }) {
+export default function MapControls({ map, onNewRequest, manualRequestPanelOpen }) {
   const zoomIn = () => map?.zoomIn();
   const zoomOut = () => map?.zoomOut();
 
@@ -19,7 +19,18 @@ export default function MapControls({ map }) {
   };
 
   return (
-    <div className="map-controls-container">
+    <div className={`map-controls-container ${manualRequestPanelOpen ? "shifted" : ""}`}>
+
+      {!manualRequestPanelOpen && (
+        <button
+          className="map-btn new-request-btn"
+          onClick={onNewRequest}
+          title="New Request"
+        >
+          <span className="new-request-icon">+</span>
+          <span className="new-request-text">Add New Request</span>
+        </button>
+      )}
 
       <LayerControl map={map} />
 
@@ -38,3 +49,4 @@ export default function MapControls({ map }) {
     </div>
   );
 }
+

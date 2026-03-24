@@ -26,11 +26,19 @@ export default function Map({
   lulcResult,
   selectedLulcYearIndex,
   lulcPanelOpen,
+  onNewRequest,
+  manualRequestPanelOpen,
+  manualFormData,
+  onManualFormChange,
+  mapInstanceRef,
 }) {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
   const drawRef = useRef(null);
   const featureIdRef = useRef(null);
+  const manualFeatureIdRef = useRef(null);
+  const isDrawUpdating = useRef(false);
+  const formUpdateFromDraw = useRef(false);
 
   const [mapReady, setMapReady] = useState(false);
   const [activeOverlay, setActiveOverlay] = useState("change"); // deforestation
@@ -94,6 +102,12 @@ export default function Map({
     return { latitude: lat, longitude: lng, distance_to_edge: distanceMeters };
   };
 
+  // Keep a ref to onManualFormChange to avoid stale closures in map event handlers
+  const onManualFormChangeRef = useRef(onManualFormChange);
+  useEffect(() => {
+    onManualFormChangeRef.current = onManualFormChange;
+  }, [onManualFormChange]);
+
   // Initialize map & draw
   useEffect(() => {
     if (mapRef.current || !mapContainer.current) return;
@@ -105,6 +119,7 @@ export default function Map({
       zoom: 12,
     });
     mapRef.current = m;
+    if (mapInstanceRef) mapInstanceRef.current = m;
 
     m.on("load", () => setMapReady(true));
     m.addControl(new mapboxgl.NavigationControl());
@@ -118,19 +133,103 @@ export default function Map({
     m.addControl(draw);
   }, []);
 
+  // Separate useEffect for manual square drag sync — runs when panel state changes
+  useEffect(() => {
+    const m = mapRef.current;
+    const draw = drawRef.current;
+    if (!m || !draw) return;
+
+    const syncSquareToForm = () => {
+      if (isDrawUpdating.current) return;
+      if (!manualFeatureIdRef.current) return;
+
+      const feature = draw.get(manualFeatureIdRef.current);
+      if (!feature) return;
+
+      const coords = feature.geometry.coordinates[0];
+      const lngs = coords.map(c => c[0]);
+      const lats = coords.map(c => c[1]);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+
+      const centerLat = parseFloat(((minLat + maxLat) / 2).toFixed(6));
+      const centerLng = parseFloat(((minLng + maxLng) / 2).toFixed(6));
+      const distanceMeters = Math.round(((maxLat - minLat) / 2) * 110574);
+
+      // Enforce perfect square by re-setting coordinates
+      const latDelta = metersToLatDegrees(distanceMeters);
+      const lngDelta = metersToLngDegrees(centerLat, distanceMeters);
+      const bl = [centerLng - lngDelta, centerLat - latDelta];
+      const br = [centerLng + lngDelta, centerLat - latDelta];
+      const tr = [centerLng + lngDelta, centerLat + latDelta];
+      const tl = [centerLng - lngDelta, centerLat + latDelta];
+
+      isDrawUpdating.current = true;
+      try {
+        draw.delete(manualFeatureIdRef.current);
+        const added = draw.add({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "Polygon", coordinates: [[bl, br, tr, tl, bl]] },
+        });
+        manualFeatureIdRef.current = added[0];
+        draw.changeMode("simple_select", { featureIds: [manualFeatureIdRef.current] });
+      } catch { }
+      isDrawUpdating.current = false;
+
+      if (onManualFormChangeRef.current) {
+        formUpdateFromDraw.current = true;
+        onManualFormChangeRef.current(prev => {
+          if (prev.latitude === centerLat && prev.longitude === centerLng && prev.distanceToEdge === distanceMeters) {
+            return prev;
+          }
+          return {
+            ...prev,
+            latitude: centerLat,
+            longitude: centerLng,
+            distanceToEdge: distanceMeters,
+          };
+        });
+      }
+    };
+
+    const onDrawUpdate = (e) => {
+      if (isDrawUpdating.current) return;
+      syncSquareToForm();
+    };
+
+    const onMouseUp = () => {
+      // Small delay to allow MapboxDraw to commit coordinates after drag
+      setTimeout(() => {
+        if (isDrawUpdating.current) return;
+        syncSquareToForm();
+      }, 50);
+    };
+
+    m.on("draw.update", onDrawUpdate);
+    m.on("mouseup", onMouseUp);
+
+    return () => {
+      m.off("draw.update", onDrawUpdate);
+      m.off("mouseup", onMouseUp);
+    };
+  }, [manualRequestPanelOpen]);
+
   // Draw/update square
   useEffect(() => {
     if (!mapRef.current || !drawRef.current) return;
 
-  let obj = null;
+    let obj = null;
 
-  if (deforestationPanelOpen && deforestationResult) {
-    obj = normalizeParsedRequest(deforestationResult);
-  }
+    if (deforestationPanelOpen && deforestationResult) {
+      obj = normalizeParsedRequest(deforestationResult);
+    }
 
-  if (!obj) {
-    obj = normalizeParsedRequest(parsedRequest);
-  }
+    if (!obj) {
+      obj = normalizeParsedRequest(parsedRequest);
+    }
 
     if (!obj || obj.latitude == null || obj.longitude == null) return;
 
@@ -162,11 +261,68 @@ export default function Map({
 
     try {
       mapRef.current.fitBounds([[Math.min(bl[0], br[0], tr[0], tl[0]), Math.min(bl[1], br[1], tr[1], tl[1])],
-                               [Math.max(bl[0], br[0], tr[0], tl[0]), Math.max(bl[1], br[1], tr[1], tl[1])]], { padding: 40 });
-    } catch {}
+      [Math.max(bl[0], br[0], tr[0], tl[0]), Math.max(bl[1], br[1], tr[1], tl[1])]], { padding: 40 });
+    } catch { }
 
     onUpdateShape({ center: [lng, lat], distance_to_edge: distance });
   }, [parsedRequest, deforestationResult, deforestationPanelOpen]);
+
+  // Manual request: draw/update square from form data
+  useEffect(() => {
+    if (!mapRef.current || !drawRef.current) return;
+
+    // Cleanup square when panel is closed
+    if (!manualRequestPanelOpen) {
+      if (manualFeatureIdRef.current) {
+        try { drawRef.current.delete(manualFeatureIdRef.current); } catch { }
+        manualFeatureIdRef.current = null;
+      }
+      return;
+    }
+
+    if (!manualFormData || manualFormData.latitude == null || manualFormData.longitude == null) return;
+
+    // Skip redraw if the form update came from dragging the square on the map
+    if (formUpdateFromDraw.current) {
+      formUpdateFromDraw.current = false;
+      return;
+    }
+
+    const lat = manualFormData.latitude;
+    const lng = manualFormData.longitude;
+    const distance = manualFormData.distanceToEdge || 2000;
+
+    if (lat === 0 && lng === 0) return; // skip default/unset values
+
+    const latDelta = metersToLatDegrees(distance);
+    const lngDelta = metersToLngDegrees(lat, distance);
+
+    const bl = [lng - lngDelta, lat - latDelta];
+    const br = [lng + lngDelta, lat - latDelta];
+    const tr = [lng + lngDelta, lat + latDelta];
+    const tl = [lng - lngDelta, lat + latDelta];
+
+    const square = {
+      type: "Feature",
+      properties: {},
+      geometry: { type: "Polygon", coordinates: [[bl, br, tr, tl, bl]] },
+    };
+
+    isDrawUpdating.current = true;
+    try {
+      // Always delete and re-add for reliable updates
+      if (manualFeatureIdRef.current) {
+        try { drawRef.current.delete(manualFeatureIdRef.current); } catch { }
+      }
+      const created = drawRef.current.add(square);
+      manualFeatureIdRef.current = created[0];
+      // Use simple_select so user can only move entire square, not individual vertices
+      drawRef.current.changeMode("simple_select", { featureIds: [manualFeatureIdRef.current] });
+    } catch (err) {
+      console.error("Error adding/updating manual square:", err);
+    }
+    isDrawUpdating.current = false;
+  }, [manualRequestPanelOpen, manualFormData?.latitude, manualFormData?.longitude, manualFormData?.distanceToEdge]);
 
   // Deforestation overlay
   useEffect(() => {
@@ -286,7 +442,7 @@ export default function Map({
       map.flyTo({ center: [lng, lat], zoom: 11 });
 
       map.addSource(LULC_SOURCE_ID, { type: "image", url, coordinates: [tl, tr, br, bl] });
-      map.addLayer({ id: LULC_LAYER_ID, type: "raster", source: LULC_SOURCE_ID, paint: { "raster-opacity": 1.0} });
+      map.addLayer({ id: LULC_LAYER_ID, type: "raster", source: LULC_SOURCE_ID, paint: { "raster-opacity": 1.0 } });
     };
 
     if (map.isStyleLoaded()) {
@@ -385,7 +541,14 @@ export default function Map({
         </div>
       )}
 
-      {mapReady && <MapControls map={mapRef.current} />}
+      {mapReady && <MapControls map={mapRef.current} onNewRequest={() => {
+        if (onNewRequest && mapRef.current) {
+          const center = mapRef.current.getCenter();
+          onNewRequest({ latitude: parseFloat(center.lat.toFixed(6)), longitude: parseFloat(center.lng.toFixed(6)) });
+        } else if (onNewRequest) {
+          onNewRequest({ latitude: 0, longitude: 0 });
+        }
+      }} manualRequestPanelOpen={manualRequestPanelOpen} />}
       <div ref={mapContainer} className="map-inner" />
     </div>
   );

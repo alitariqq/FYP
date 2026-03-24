@@ -14,6 +14,7 @@ frontend/frontend/.env
 # OR relative to repo root:
 # ./.env
 backend/backend/data/
+backend/backend/media/
 # Django stuff
 *.log
 *.pot

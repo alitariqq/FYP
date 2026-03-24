@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 import Map from "../components/Map";
@@ -7,6 +7,7 @@ import GeminiPanel from "../components/GeminiPanel";
 import ParsedRequestUI from "../components/ParsedRequestUI";
 import DeforestationPanel from "../components/DeforestationPanel";
 import LULCPanel from "../components/LULCPanel";
+import ManualRequestPanel from "../components/ManualRequestPanel";
 
 import api from "../api";
 import logo from "../assets/logoText.png";
@@ -37,6 +38,22 @@ export default function Home() {
   const [lulcPanelOpen, setLulcPanelOpen] = useState(false);
   const [lulcResult, setLulcResult] = useState(null);
   const [selectedLulcYearIndex, setSelectedLulcYearIndex] = useState(0);
+
+  // Manual request panel states
+  const [manualRequestPanelOpen, setManualRequestPanelOpen] = useState(false);
+  const [manualRequestSubmitted, setManualRequestSubmitted] = useState(false);
+  const mapRef = useRef(null);
+  const [manualFormData, setManualFormData] = useState({
+    locationName: "",
+    studyType: "deforestation",
+    dateRangeStart: "",
+    dateRangeEnd: "",
+    isTimeseries: false,
+    intervalLength: 0,
+    latitude: 0,
+    longitude: 0,
+    distanceToEdge: 2000,
+  });
 
 
   // old Use effect working for deforestation
@@ -218,6 +235,53 @@ export default function Home() {
     setMessages([]);
   };
 
+  // Manual request handlers
+  const handleManualRequestOpen = (mapCenter) => {
+    setManualRequestSubmitted(false);
+    setManualFormData(prev => ({
+      ...prev,
+      latitude: mapCenter?.latitude || 0,
+      longitude: mapCenter?.longitude || 0,
+    }));
+    setManualRequestPanelOpen(true);
+  };
+
+  const handleManualSubmit = async () => {
+    const payload = {
+      latitude: manualFormData.latitude,
+      longitude: manualFormData.longitude,
+      distance_to_edge: manualFormData.distanceToEdge,
+      region_name: manualFormData.locationName,
+      study_type: manualFormData.studyType,
+      is_timeseries: manualFormData.studyType === "deforestation" ? false : manualFormData.isTimeseries,
+      date_range_start: manualFormData.dateRangeStart || null,
+      date_range_end: manualFormData.dateRangeEnd || null,
+      interval_length: manualFormData.studyType === "deforestation" ? 0 : (manualFormData.intervalLength || 0),
+    };
+
+    const token = localStorage.getItem("access_token");
+    await api.post("/queries/parsed-request/", payload, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    setManualRequestSubmitted(true);
+  };
+
+  const handleManualNewRequest = () => {
+    setManualRequestSubmitted(false);
+    setManualFormData({
+      locationName: "",
+      studyType: "deforestation",
+      dateRangeStart: "",
+      dateRangeEnd: "",
+      isTimeseries: false,
+      intervalLength: 0,
+      latitude: 0,
+      longitude: 0,
+      distanceToEdge: 2000,
+    });
+  };
+
   return (
     <div className="home-container">
       <button className="site-logo-btn" onClick={() => (window.location.href = "/")}>
@@ -243,6 +307,13 @@ export default function Home() {
         lulcResult={lulcResult}
         selectedLulcYearIndex={selectedLulcYearIndex}
         lulcPanelOpen={lulcPanelOpen}
+
+        // Manual request
+        onNewRequest={handleManualRequestOpen}
+        manualRequestPanelOpen={manualRequestPanelOpen}
+        manualFormData={manualFormData}
+        onManualFormChange={setManualFormData}
+        mapInstanceRef={mapRef}
       />
 
 
@@ -280,6 +351,29 @@ export default function Home() {
       />
 
 
+      <ManualRequestPanel
+        panelOpen={manualRequestPanelOpen}
+        setPanelOpen={(open) => {
+          setManualRequestPanelOpen(open);
+          if (!open) setManualRequestSubmitted(false);
+        }}
+        formData={manualFormData}
+        onFormChange={setManualFormData}
+        onSubmit={handleManualSubmit}
+        submitted={manualRequestSubmitted}
+        onNewRequest={handleManualNewRequest}
+        onRelocate={() => {
+          if (mapRef.current) {
+            const center = mapRef.current.getCenter();
+            setManualFormData(prev => ({
+              ...prev,
+              latitude: parseFloat(center.lat.toFixed(6)),
+              longitude: parseFloat(center.lng.toFixed(6)),
+            }));
+          }
+        }}
+      />
+
       <FloatingButtons
         panelOpen={panelOpen}
         setPanelOpen={setPanelOpen}
@@ -288,6 +382,7 @@ export default function Home() {
         handleLogout={handleLogout}
         deforestationPanelOpen={deforestationPanelOpen}
         lulcPanelOpen={lulcPanelOpen}
+        manualRequestPanelOpen={manualRequestPanelOpen}
       />
 
       {parsedRequest && (
