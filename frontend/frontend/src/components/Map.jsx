@@ -122,9 +122,15 @@ export default function Map({
   useEffect(() => {
     if (!mapRef.current || !drawRef.current) return;
 
-    const obj = deforestationPanelOpen && deforestationResult
-      ? deforestationResult
-      : normalizeParsedRequest(parsedRequest);
+  let obj = null;
+
+  if (deforestationPanelOpen && deforestationResult) {
+    obj = normalizeParsedRequest(deforestationResult);
+  }
+
+  if (!obj) {
+    obj = normalizeParsedRequest(parsedRequest);
+  }
 
     if (!obj || obj.latitude == null || obj.longitude == null) return;
 
@@ -167,7 +173,7 @@ export default function Map({
     const map = mapRef.current;
     if (!map) return;
 
-    if (!deforestationPanelOpen && !panelOpen) {
+    if (!deforestationPanelOpen && !panelOpen && !parsedRequest) {
       if (map.getLayer(MASK_LAYER_ID)) map.removeLayer(MASK_LAYER_ID);
       if (map.getSource(MASK_SOURCE_ID)) map.removeSource(MASK_SOURCE_ID);
       if (featureIdRef.current && drawRef.current.get(featureIdRef.current)) {
@@ -218,10 +224,6 @@ export default function Map({
     if (!lulcPanelOpen) {
       if (map.getLayer(LULC_LAYER_ID)) map.removeLayer(LULC_LAYER_ID);
       if (map.getSource(LULC_SOURCE_ID)) map.removeSource(LULC_SOURCE_ID);
-      if (featureIdRef.current && drawRef.current.get(featureIdRef.current)) {
-        drawRef.current.delete(featureIdRef.current);
-        featureIdRef.current = null;
-      }
       return;
     }
 
