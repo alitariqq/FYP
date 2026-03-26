@@ -61,19 +61,25 @@ export default function Requests() {
 
       const result = res.data;
 
-      //Study type:
       if (study_type.toLowerCase() === "deforestation") {
         navigate("/", { state: { deforestationResult: result } });
       } else if (study_type.toLowerCase() === "lulc") {
         navigate("/", { state: { lulcResult: result } });
       }
 
-
     } catch (err) {
       console.error(err);
     }
   };
 
+  // ✅ Added helper function (ONLY change)
+  const formatStudyType = (type) => {
+    if (!type) return "";
+    const t = type.toLowerCase();
+    if (t === "lulc") return "Land Use Land Cover";
+    if (t === "deforestation") return "Deforestation";
+    return type; // fallback
+  };
 
   const filteredRequests = requests.filter((req) => {
     const matchesFilter =
@@ -133,7 +139,8 @@ export default function Requests() {
                 {filteredRequests.map((req) => (
                   <tr key={req.request_id}>
                     <td>{req.region_name}</td>
-                    <td>{req.study_type}</td>
+                    {/* ✅ Only this line changed */}
+                    <td>{formatStudyType(req.study_type)}</td>
                     <td>{new Date(req.submitted_at).toLocaleDateString()}</td>
                     <td>
                       <span

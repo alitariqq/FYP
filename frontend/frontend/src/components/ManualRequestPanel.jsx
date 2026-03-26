@@ -145,11 +145,11 @@ export default function ManualRequestPanel({
                         {/* Interval Length — LULC timeseries only */}
                         {showInterval && (
                             <div className="manual-field">
-                                <label>Interval Length (days)</label>
+                                <label>Interval Length (Years)</label>
                                 <input
                                     type="number"
-                                    min="1"
-                                    placeholder="e.g. 365"
+                                    min="0"
+                                    placeholder="0"
                                     value={formData.intervalLength}
                                     onChange={(e) =>
                                         handleChange("intervalLength", parseInt(e.target.value) || 0)
